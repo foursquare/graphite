@@ -19,6 +19,7 @@ from django.conf import settings
 from graphite.account.models import Profile
 
 from graphite.hypertable_client import HyperTablePool, addPrefix, removePrefix
+from graphite.metrics.hypertable_search import HyperStore
 from graphite.util import getProfile, getProfileByUsername, defaultUser, json
 from graphite.logger import log
 import hashlib
@@ -59,14 +60,8 @@ def searchHypertable(request):
   if not query:
     return HttpResponse("")
 
-  query = 'SELECT * FROM search WHERE ROW REGEXP ".*%s.*"' % (query)
+  result_string = ','.join(HyperStore().search(query))
 
-  metrics = []
-  def processResult(key, family, column, val, ts):
-    metrics.append(removePrefix(key))
-
-  HyperTablePool.doQuery(query, processResult)
-  result_string = ','.join(metrics)
   return HttpResponse(result_string, mimetype='text/plain')
 
 

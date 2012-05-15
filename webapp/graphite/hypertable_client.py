@@ -3,6 +3,7 @@ from __future__ import with_statement
 from django.conf import settings
 from graphite.logger import log
 import hypertable.thriftclient
+import libHyperPython
 import threading
 import re
 import time
@@ -47,11 +48,16 @@ class ConnectionPool:
       scanner = conn.scanner_open(namespace, table, spec)
 
       while True:
-        row_data = conn.scanner_get_cells_as_arrays(scanner)
-        if(len(row_data) == 0):
+        buf = conn.scanner_get_cells_serialized(scanner)
+        if (len(buf) <= 1):
           break
-        for key, family, column, val, ts in row_data:
-          cb(key, family, column, val, ts)
+        scr = libHyperPython.SerializedCellsReader(buf, len(buf))
+        while scr.has_next():
+          cb( scr.row(),
+              scr.column_family(),
+              scr.column_qualifier(),
+              scr.value()[0:scr.value_len()],
+              scr.timestamp())
 
       conn.close_scanner(scanner)
       self.releaseConn(conn)
@@ -62,18 +68,25 @@ class ConnectionPool:
 
   def doQuery(self, query, cb):
     with self.semaphore:
+      start = time.time()
       conn = self.getConn()
       namespace = conn.namespace_open('monitor')
       results =  conn.hql_exec2(namespace, query, 0, 1)
-
       while True:
-        row_data = conn.next_row_as_arrays(results.scanner)
-        if not row_data:
+        buf = conn.scanner_get_cells_serialized(results.scanner)
+        if (len(buf) <= 1):
           break
-        for key, family, column, val, ts in row_data:
-          cb(key, family, column, val, ts)
+        scr = libHyperPython.SerializedCellsReader(buf, len(buf))
+        while scr.has_next():
+          cb( scr.row(),
+              scr.column_family(),
+              scr.column_qualifier(),
+              scr.value()[0:scr.value_len()],
+              scr.timestamp())
 
       conn.close_scanner(results.scanner)
       self.releaseConn(conn)
+      log.info(query)
+      log.info('fetch time: %s' % (time.time() - start))
 
 HyperTablePool = ConnectionPool(20)

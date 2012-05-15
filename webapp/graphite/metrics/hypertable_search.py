@@ -30,6 +30,11 @@ class HyperStore:
     else:
       return [removePrefix(pathExpr)]
 
+  def search(self, query):
+    qre = '(?i)%s' % re.sub('\*', '.*', re.sub('\.', '\.', query))
+    return [removePrefix(p) for p in self.findByRegex(qre)]
+
+
   def findByRegex(self, regex):
     where = 'ROW REGEXP "%s"' % regex
     return self.findHelper(where)
