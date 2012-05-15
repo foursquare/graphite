@@ -5,6 +5,7 @@ from graphite.logger import log
 import hypertable.thriftclient
 import threading
 import re
+import time
 
 def removePrefix(path):
   if settings.HYPERTABLE_PREFIX:
@@ -37,6 +38,27 @@ class ConnectionPool:
   def releaseConn(self, conn):
     with self.lock:
       return self.freeClients.append(conn)
+
+  def doScan(self, spec, table, cb):
+    with self.semaphore:
+      start = time.time()
+      conn = self.getConn()
+      namespace = conn.namespace_open('monitor')
+      scanner = conn.scanner_open(namespace, table, spec)
+
+      while True:
+        row_data = conn.scanner_get_cells_as_arrays(scanner)
+        if(len(row_data) == 0):
+          break
+        for key, family, column, val, ts in row_data:
+          cb(key, family, column, val, ts)
+
+      conn.close_scanner(scanner)
+      self.releaseConn(conn)
+      log.info(spec)
+      log.info('fetch time: %s' % (time.time() - start))
+
+
 
   def doQuery(self, query, cb):
     with self.semaphore:
