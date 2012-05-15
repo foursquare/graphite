@@ -24,7 +24,7 @@ from graphite.logger import log
 from graphite.storage import STORE, LOCAL_STORE
 from graphite.hypertable_client import HyperTablePool, removePrefix, addPrefix
 from graphite.metrics.hypertable_search import HyperStore
-from hyperthrift.gen.ttypes import ScanSpec, RowInterval
+from hyperthrift.gen.ttypes import ScanSpec, CellInterval
 from graphite.render.hashing import ConsistentHashRing
 
 try:
@@ -231,12 +231,9 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
   start, end = int(timestamp(requestContext['startTime'])), int(timestamp(requestContext['endTime']))
 
-  diff = endDateTime - startDateTime
-  days = diff.days
-  if diff.seconds > 0:
-    days = days + 1
-  cqs = [ (startDateTime + datetime.timedelta(days=dd)).strftime('metric:^%Y-%m-%d') \
-      for dd in range(0, days) ]
+  startColString = startDateTime.strftime('metric:%Y-%m-%d %H')
+  endColString = endDateTime.strftime('metric:%Y-%m-%d %H')
+  cellIntervals = [ CellInterval(m, startColString, True, m, endColString, True) for m in metrics ]
 
   nanosStart = start * 10**9L
   nanosEnd = end * 10**9L
@@ -244,8 +241,7 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   scan_spec = ScanSpec(None, None, None, 1)
   scan_spec.start_time = nanosStart
   scan_spec.end_time = nanosEnd
-  scan_spec.row_intervals = [RowInterval(m, True, m, True) for m in metrics]
-  scan_spec.columns = cqs
+  scan_spec.cell_intervals = cellIntervals
   scan_spec.versions = COL_INTERVAL_SECS / MIN_INTERVAL_SECS
 
   log.info(startDateTime)
