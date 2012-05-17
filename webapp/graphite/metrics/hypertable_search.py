@@ -64,7 +64,13 @@ class HyperNode:
 class HyperTableIndexSearcher:
   def search(self, query, max_results=None, keep_query_pattern=False):
     query_parts = query.split('.')
-    metrics_found = set()
+    count = 0
+    for result in self.find(query):
+      if count >= max_results:
+        return
+      yield { 'path': result.metric_path, 'is_leaf': result.isLeaf() }
+      count += 1
+
 
   def find(self, query):
     query = addPrefix(query)
@@ -72,11 +78,12 @@ class HyperTableIndexSearcher:
   
     pattern = '.'.join(query_parts[0:-1]) + '|'
     query = 'SELECT * FROM tree WHERE row =^ "%s"' % pattern
-    log.info('find query: %s' % query)
 
     nodes = []
     def processResult(key, family, column, val, ts):
+      log.info("%s = %s" % (key, val))
       if column == 'has_children':
+        key = re.sub('^\|','', key)
         nodes.append(HyperNode(key.replace('|', '.'), val == '0'))
 
     HyperTablePool.doQuery(query, processResult)

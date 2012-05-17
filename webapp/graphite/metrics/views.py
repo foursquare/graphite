@@ -49,7 +49,6 @@ def index_json(request):
 
 def search_view(request):
   query = str(request.REQUEST['query'].strip())
-  log.info('sarching for: %s' % query)
   search_request = {
     'query' : query,
     'max_results' : int( request.REQUEST.get('max_results', 25) ),
@@ -58,7 +57,9 @@ def search_view(request):
   #if not search_request['query'].endswith('*'):
   #  search_request['query'] += '*'
 
-  results = sorted(hypertable_searcher.search(**search_request))
+  search_backend = hypertable_searcher or searcher
+
+  results = sorted(search_backend.search(**search_request))
   result_data = json.dumps( dict(metrics=results) )
   return HttpResponse(result_data, mimetype='application/json')
 
