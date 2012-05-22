@@ -248,10 +248,9 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   log.info(endDateTime)
   log.info(scan_spec)
 
-  valuesMap = {}
+  valuesMap = defaultdict(list)
+  sortedVals = {}
   metricStep = {}
-  for m in metrics:
-    valuesMap[m] = []
 
   def processResult(key, family, column, val, ts):
     its = long(ts) / 10**9L  #nanoseconds -> seconds
@@ -261,31 +260,37 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
   HyperTablePool.doScan(scan_spec, "metrics", processResult)
 
+  elapsed = end - start
+  lowestMetricStep = elapsed
+
   # post-fetch processing
-  for m in metrics:
+  for m in valuesMap.keys():
     # determine step size (its the minimum step found)
     minStep = end - start
-    sortedVals = sorted(valuesMap[m], key=lambda x: x[0])
-    for i in range(1, len(sortedVals)):
-      step = sortedVals[i][0] - sortedVals[i-1][0]
-      minStep = min(minStep, step)
+    sortedVals[m] = sorted(valuesMap[m], key=lambda x: x[0])
+    for i in range(1, len(sortedVals[m])):
+      step = sortedVals[m][i][0] - sortedVals[m][i-1][0]
+      if step and step < minStep and elapsed % step == 0:
+        minStep = step
+    if lowestMetricStep == None or lowestMetricStep > minStep:
+      lowestMetricStep = minStep
 
-    minStep = int(minStep)
-    steps = int(end - start) / minStep
-    metricStep[m] = minStep
+  for m in valuesMap.keys():
+    # resample everything to finest granularity
+    steps = int(end - start) / lowestMetricStep
 
     # estimation of confidence: length / steps * 100
 
     # push final values
     finalValues = [None] * steps
-    for x in sortedVals:
-      bucket = (x[0] - start) / minStep
+    for x in sortedVals[m]:
+      bucket = (x[0] - start) / lowestMetricStep
       finalValues[bucket] = float(x[1])
     valuesMap[m] = finalValues
 
   seriesList = []
-  for m in metrics:
-    series = TimeSeries(removePrefix(m), start, end, metricStep[m], valuesMap[m])
+  for m in valuesMap.keys():
+    series = TimeSeries(removePrefix(m), start, end, lowestMetricStep, valuesMap[m])
     series.pathExpression = pathExpr # hack to pass expressions through to render functions
     seriesList.append(series)
 
