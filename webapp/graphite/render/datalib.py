@@ -226,6 +226,9 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   pathExpr = addPrefix(pathExpr)
   metrics = [addPrefix(m) for m in HyperStore().find(pathExpr)]
 
+  if not metrics:
+    return []
+
   startDateTime = requestContext['startTime']
   endDateTime = requestContext['endTime']
 
@@ -265,7 +268,7 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
   # post-fetch processing
   for m in valuesMap.keys():
-    # determine step size (its the minimum step found)
+    # determine step size (the minimum evenly divisible step found)
     minStep = end - start
     sortedVals[m] = sorted(valuesMap[m], key=lambda x: x[0])
     for i in range(1, len(sortedVals[m])):
