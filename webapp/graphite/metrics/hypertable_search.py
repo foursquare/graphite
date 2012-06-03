@@ -31,11 +31,15 @@ class HyperIndex:
   def _loadFromFile(self):
     if os.path.exists(self.index_path):
       s = time.time()
-      self.last_atime = int(os.path.getmtime(self.index_path)) * 10**9L
       fh = open(self.index_path)
+      has_lines = False
       for l in fh:
-        self._add(l.strip())
+        if l.strip():
+          self._add(l.strip())
+          has_lines = True
       fh.close()
+      if has_lines:
+        self.last_atime = int(os.path.getmtime(self.index_path)) * 10**9L
       log.info("[HyperIndex] initial load took %.6f seconds" % (time.time() - s))
 
 
