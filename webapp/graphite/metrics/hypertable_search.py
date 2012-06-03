@@ -20,7 +20,7 @@ CACHE_CHECK_INTERVAL_SECS = 300
 
 class HyperIndex:
   def __init__(self):
-    self.index_path = 'index.txt'
+    self.index_path = settings.INDEX_FILE + 'ht'
     self.last_atime = 0
     self.every_metric = ''
     self.tree = ({}, {})
