@@ -23,7 +23,7 @@ from django.conf import settings
 from graphite.logger import log
 from graphite.storage import STORE, LOCAL_STORE
 from graphite.hypertable_client import HyperTablePool, removePrefix, addPrefix
-from graphite.metrics.hypertable_search import HyperStore
+from graphite.metrics.hypertable_search import hypertable_index
 from hyperthrift.gen.ttypes import ScanSpec, CellInterval
 from graphite.render.hashing import ConsistentHashRing
 
@@ -220,11 +220,10 @@ def fetchData(requestContext, pathExpr):
 def fetchDataFromHyperTable(requestContext, pathExpr):
   MIN_INTERVAL_SECS = 10
   COL_INTERVAL_SECS = 60 * 60
-  if pathExpr.lower().startswith('graphite.'):
-    pathExpr = pathExpr[9:]
 
+  log.info('fetching %s' % pathExpr)
   pathExpr = addPrefix(pathExpr)
-  metrics = [addPrefix(m) for m in HyperStore().find(pathExpr)]
+  metrics = [addPrefix(m) for m in hypertable_index.findMetric(pathExpr)]
 
   if not metrics:
     return []
@@ -237,6 +236,9 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   startColString = startDateTime.strftime('metric:%Y-%m-%d %H')
   endColString = endDateTime.strftime('metric:%Y-%m-%d %H')
   cellIntervals = [ CellInterval(m, startColString, True, m, endColString, True) for m in metrics ]
+
+  if cellIntervals == None:
+    return []
 
   nanosStart = start * 10**9L
   nanosEnd = end * 10**9L
@@ -261,7 +263,7 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
 
 
-  HyperTablePool.doScan(scan_spec, "metrics", processResult)
+  HyperTablePool.doScanAsArrays(scan_spec, "metrics", processResult)
 
   elapsed = end - start
   lowestMetricStep = elapsed

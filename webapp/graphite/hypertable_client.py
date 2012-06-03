@@ -38,6 +38,26 @@ class ConnectionPool:
     with self.lock:
       return self.freeClients.append(conn)
 
+
+  def doScanAsArrays(self, spec, table, cb):
+    with self.semaphore:
+      start = time.time()
+      conn = self.getConn()
+      namespace = conn.namespace_open('monitor')
+      scanner = conn.scanner_open(namespace, table, spec)
+
+      while True:
+        row_data = conn.scanner_get_cells_as_arrays(scanner)
+        if(len(row_data) == 0):
+          break
+        for key, family, column, val, ts in row_data:
+          cb(key, family, column, val, ts)
+      conn.close_scanner(scanner)
+      self.releaseConn(conn)
+      log.info(spec)
+      log.info('scan-arrays-fetch time: %s' % (time.time() - start))
+
+
   def doScan(self, spec, table, cb):
     with self.semaphore:
       start = time.time()
@@ -60,9 +80,27 @@ class ConnectionPool:
       conn.close_scanner(scanner)
       self.releaseConn(conn)
       log.info(spec)
-      log.info('fetch time: %s' % (time.time() - start))
+      log.info('scan-fetch time: %s' % (time.time() - start))
 
 
+
+  def doQueryAsArrays(self, query, cb):
+    with self.semaphore:
+      start = time.time()
+      conn = self.getConn()
+      namespace = conn.namespace_open('monitor')
+      results =  conn.hql_exec2(namespace, query, 0, 1)
+      while True:
+        row_data = conn.scanner_get_cells_as_arrays(results.scanner)
+        if(len(row_data) == 0):
+          break
+        for key, family, column, val, ts in row_data:
+          cb(key, family, column, val, ts)
+
+      conn.close_scanner(results.scanner)
+      self.releaseConn(conn)
+      log.info(query)
+      log.info('query-fetch time: %s' % (time.time() - start))
 
   def doQuery(self, query, cb):
     with self.semaphore:
@@ -85,6 +123,6 @@ class ConnectionPool:
       conn.close_scanner(results.scanner)
       self.releaseConn(conn)
       log.info(query)
-      log.info('fetch time: %s' % (time.time() - start))
+      log.info('query-fetch time: %s' % (time.time() - start))
 
 HyperTablePool = ConnectionPool(20)
