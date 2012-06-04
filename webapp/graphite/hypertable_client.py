@@ -67,15 +67,17 @@ class ConnectionPool:
 
       while True:
         buf = conn.scanner_get_cells_serialized(scanner)
-        if (len(buf) <= 1):
-          break
         scr = libHyperPython.SerializedCellsReader(buf, len(buf))
+        any_rows = False
         while scr.has_next():
+          any_rows = True
           cb( scr.row(),
               scr.column_family(),
               scr.column_qualifier(),
               scr.value()[0:scr.value_len()],
               scr.timestamp())
+        if not any_rows:
+          break
 
       conn.close_scanner(scanner)
       self.releaseConn(conn)
@@ -110,15 +112,17 @@ class ConnectionPool:
       results =  conn.hql_exec2(namespace, query, 0, 1)
       while True:
         buf = conn.scanner_get_cells_serialized(results.scanner)
-        if (len(buf) <= 1):
-          break
         scr = libHyperPython.SerializedCellsReader(buf, len(buf))
+        any_rows = False
         while scr.has_next():
+          any_rows = True
           cb( scr.row(),
               scr.column_family(),
               scr.column_qualifier(),
               scr.value()[0:scr.value_len()],
               scr.timestamp())
+        if not any_rows:
+          break
 
       conn.close_scanner(results.scanner)
       self.releaseConn(conn)

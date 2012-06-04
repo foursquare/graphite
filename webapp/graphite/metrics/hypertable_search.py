@@ -44,22 +44,24 @@ class HyperIndex:
 
 
   def _loadFromHyperTable(self):
-    # if the index_path is suddenly deleted, that means start from scratch
-    if not os.path.exists(self.index_path):
-      self.last_atime = 0
+    fh = None
+    # if the index_path exists, update it
+    if os.path.exists(self.index_path):
+      fh = open(self.index_path, 'a')
+
     spec = ScanSpec(keys_only=True, start_time=self.last_atime, versions=1)
     s = time.time()
     self.last_atime = int(s) * 10**9L
     metrics = []
-    fh = open(self.index_path, 'a')
     def processResult(key, family, column, val, ts):
       if not self._existsInTree(key):
-        fh.write(key + '\n')
+        if fh:
+          fh.write(key + '\n')
         self._add(key)
 
-    # TODO(johng): convert to a doScan once SCR works on large results
-    HyperTablePool.doScanAsArrays(spec, "search", processResult)
-    fh.close()
+    HyperTablePool.doScan(spec, "search", processResult)
+    if fh:
+      fh.close()
     log.info("[HyperIndex] index reload took %.6f seconds" % (time.time() - s))
 
   # like find in tree, for exact matches.
@@ -202,7 +204,7 @@ class HyperStore:
     def processResult(key, family, column, val, ts):
       metrics.append(key)
 
-    HyperTablePool.doQueryAsArrays(query, processResult)
+    HyperTablePool.doQuery(query, processResult)
     return metrics
 
 class HyperNode:

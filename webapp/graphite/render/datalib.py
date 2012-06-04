@@ -220,6 +220,7 @@ def fetchData(requestContext, pathExpr):
 def fetchDataFromHyperTable(requestContext, pathExpr):
   MIN_INTERVAL_SECS = 10
   COL_INTERVAL_SECS = 60 * 60
+  LEAST_GRANULAR_STEP = 60 #TODO make this a setting
 
   log.info('fetching %s' % pathExpr)
   pathExpr = addPrefix(pathExpr)
@@ -263,10 +264,11 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
 
 
-  HyperTablePool.doScanAsArrays(scan_spec, "metrics", processResult)
+  HyperTablePool.doScan(scan_spec, "metrics", processResult)
 
   elapsed = end - start
-  lowestMetricStep = elapsed
+  lowestMetricStep = LEAST_GRANULAR_STEP  # was: elapsed but for small
+  # intervals it isn't great
 
   # post-fetch processing
   for m in valuesMap.keys():
