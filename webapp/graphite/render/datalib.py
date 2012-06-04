@@ -218,9 +218,11 @@ def fetchData(requestContext, pathExpr):
   return fetchDataFromHyperTable(requestContext, pathExpr)
 
 def fetchDataFromHyperTable(requestContext, pathExpr):
+  #TODO: use django settings
   MIN_INTERVAL_SECS = 10
   COL_INTERVAL_SECS = 60 * 60
-  LEAST_GRANULAR_STEP = 60 #TODO make this a setting
+  POSSIBLE_INTERVALS = [ 1, 10, 15, 30, 60, 120 ]
+
 
   log.info('fetching %s' % pathExpr)
   pathExpr = addPrefix(pathExpr)
@@ -267,31 +269,51 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   HyperTablePool.doScan(scan_spec, "metrics", processResult)
 
   elapsed = end - start
-  lowestMetricStep = LEAST_GRANULAR_STEP  # was: elapsed but for small
+  lowestMetricStep = elapsed  # was: elapsed but for small
   # intervals it isn't great
 
+  stepsSeen = {}
   # post-fetch processing
+  for interval in POSSIBLE_INTERVALS:
+    stepsSeen[interval] = 0
+    
   for m in valuesMap.keys():
     # determine step size (the minimum evenly divisible step found)
-    minStep = end - start
+    minStep = elapsed
     sortedVals[m] = sorted(valuesMap[m], key=lambda x: x[0])
     for i in range(1, len(sortedVals[m])):
       step = sortedVals[m][i][0] - sortedVals[m][i-1][0]
+      closestDist = 2 * POSSIBLE_INTERVALS[-1]
+      closestDistAt = POSSIBLE_INTERVALS[-1]
+      #TODO this is slow
+      for interval in POSSIBLE_INTERVALS:
+        dist = abs(step - interval)
+        if dist < closestDist:
+          closestDist = dist
+          closestDistAt = interval
+      stepsSeen[closestDistAt] += 1
       if step and step < minStep and elapsed % step == 0:
         minStep = step
     if lowestMetricStep == None or lowestMetricStep > minStep:
       lowestMetricStep = minStep
+  mostCommonStep = -1
+  mostCommonCount = 0
+  print stepsSeen
+  for k,v in stepsSeen.iteritems():
+    if v > mostCommonCount:
+      mostCommonCount = v
+      mostCommonStep = k
 
   for m in valuesMap.keys():
     # resample everything to finest granularity
-    steps = int(end - start) / lowestMetricStep
+    steps = int(end - start) / mostCommonStep
 
     # estimation of confidence: length / steps * 100
 
     # push final values
     finalValues = [None] * steps
     for x in sortedVals[m]:
-      bucket = (x[0] - start) / lowestMetricStep
+      bucket = int(min(round(float(x[0] - start) / float(mostCommonStep)), steps - 1))
       finalValues[bucket] = float(x[1])
     valuesMap[m] = finalValues
 
