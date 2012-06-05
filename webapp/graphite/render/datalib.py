@@ -221,7 +221,6 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   #TODO: use django settings
   MIN_INTERVAL_SECS = 10
   COL_INTERVAL_SECS = 60 * 60
-  POSSIBLE_INTERVALS = [ 1, 10, 15, 30, 60 ]
 
 
   log.info('fetching %s' % pathExpr)
@@ -270,10 +269,7 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
   elapsed = end - start
 
-  stepsSeen = {}
-  # post-fetch processing
-  for interval in POSSIBLE_INTERVALS:
-    stepsSeen[interval] = 0
+  stepsSeen = defaultdict(int)
     
   for m in valuesMap.keys():
     # determine step size (the minimum evenly divisible step found)
@@ -281,25 +277,14 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
     sortedVals[m] = sorted(valuesMap[m], key=lambda x: x[0])
     for i in range(1, len(sortedVals[m])):
       step = sortedVals[m][i][0] - sortedVals[m][i-1][0]
-      closestDist = 1.5 * POSSIBLE_INTERVALS[-1]
-      closestDistAt = -1
-      #TODO this is slow
-      for interval in POSSIBLE_INTERVALS:
-        dist = abs(step - interval)
-        if dist < closestDist:
-          closestDist = dist
-          closestDistAt = interval
-      # don't let gappy data vote
-      if closestDistAt != -1:
-        stepsSeen[closestDistAt] += 1
+      if elapsed % step == 0:
+        stepsSeen[step] += 1
   mostCommonStep = -1
   mostCommonCount = 0
-  print stepsSeen
   for k,v in stepsSeen.iteritems():
     if v > mostCommonCount:
       mostCommonCount = v
       mostCommonStep = k
-  print mostCommonStep
   # hack for no data
   if mostCommonStep == -1:
     mostCommonStep = 60
@@ -383,3 +368,4 @@ def mergeResults(dbResults, cacheResults):
 def timestamp(datetime):
   "Convert a datetime object into epoch time"
   return time.mktime( datetime.timetuple() )
+
