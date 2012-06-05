@@ -301,7 +301,7 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
       mostCommonStep = k
   print mostCommonStep
   # hack for no data
-  if mostCommonStep == 0:
+  if mostCommonStep == -1:
     mostCommonStep = 60
 
   for m in valuesMap.keys():
