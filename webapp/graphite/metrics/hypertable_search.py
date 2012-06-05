@@ -94,7 +94,7 @@ class HyperIndex:
       matches = []
       for variant in needle:
         matches.extend(fnmatch.filter(entries, variant))
-      return list(_deduplicate(matches))
+      return sorted(list(_deduplicate(matches)))
     else:
       if needle in haystack_dict:
         return [needle]

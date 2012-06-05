@@ -290,10 +290,8 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
     mostCommonStep = 60
 
   for m in valuesMap.keys():
-    # resample everything to finest granularity
+    # resample everything to 'best' granularity
     steps = int(end - start) / mostCommonStep
-
-    # estimation of confidence: length / steps * 100
 
     # push final values
     finalValues = [None] * steps
@@ -303,7 +301,7 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
     valuesMap[m] = finalValues
 
   seriesList = []
-  for m in valuesMap.keys():
+  for m in sorted(valuesMap.keys()):
     series = TimeSeries(removePrefix(m), start, end, mostCommonStep, valuesMap[m])
     series.pathExpression = pathExpr # hack to pass expressions through to render functions
     seriesList.append(series)
