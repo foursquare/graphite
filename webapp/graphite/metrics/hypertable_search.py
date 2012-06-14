@@ -49,7 +49,7 @@ class HyperIndex:
     if os.path.exists(self.index_path):
       fh = open(self.index_path, 'a')
 
-    spec = ScanSpec(keys_only=True, start_time=self.last_atime, versions=1)
+    spec = ScanSpec(start_time=self.last_atime, versions=1)
     s = time.time()
     self.last_atime = int(s) * 10**9L
     metrics = []
@@ -57,7 +57,7 @@ class HyperIndex:
       if not self._existsInTree(key):
         if fh:
           fh.write(key + '\n')
-        self._add(key)
+        self._add(key, val)
 
     HyperTablePool.doScan(spec, "search", processResult)
     if fh:
@@ -78,7 +78,14 @@ class HyperIndex:
     else:
       return False
 
-  def _add(self, key):
+  def _add(self, key, val):
+    realval = None
+    try:
+      if val != '':
+        realval = int(val)
+    except:
+      log.warning('unexpected val for %s: %s' % (key, val))
+
     branches = key.split('.')
     cursor = self.tree
     leaf = branches.pop()
@@ -86,7 +93,7 @@ class HyperIndex:
       if branch not in cursor[1]:
         cursor[1][branch] = ({}, {}) # (leaves, children)
       cursor = cursor[1][branch]
-    cursor[0][leaf] = 1 # add leaf
+    cursor[0][leaf] =  realval # add leaf
 
   def _getMatches(self, haystack_dict, needle):
     if type(needle) is list: # patterns, variants
@@ -127,9 +134,9 @@ class HyperIndex:
     if len(keyparts) == 0: #leaf
       res = []
       if leaf_matches_leaves:
-        res.extend([([e], True) for e in self._getMatches(cursor[0], part)])
+        res.extend([([e], True, cursor[0][e]) for e in self._getMatches(cursor[0], part)])
       if leaf_matches_branches:
-        res.extend([([e], False) for e in self._getMatches(cursor[1], part)])
+        res.extend([([e], False, None) for e in self._getMatches(cursor[1], part)])
       #print res
       return res
     else:
@@ -149,14 +156,14 @@ class HyperIndex:
     parts = self._split(pathExpr)
     parts.reverse() #keyparts is reversed, because pop is fast
     res = self._findInTree(self.tree, parts, leaf_matches_leaves, leaf_matches_branches)
-    nodes = [HyperNode('.'.join(reversed(x[0])), x[1]) for x in res]
+    nodes = [HyperNode('.'.join(reversed(x[0])), x[1], x[2]) for x in res]
     
     log.info("[HyperIndex] search for %s took %.6f seconds" % (pathExpr, time.time() - s))
     return nodes
 
   # only returns metrics
   def findMetric(self, pathExpr):
-    return [node.metric_path for node in self.findInTree(pathExpr)]
+    return [(node.metric_path, node.value) for node in self.findInTree(pathExpr)]
 
   # returns HyperNodes which could be metrics, or subfolders
   def find(self, pathExpr):
@@ -210,11 +217,12 @@ class HyperStore:
 class HyperNode:
   context = {}
 
-  def __init__(self, metric_path, isLeaf):
+  def __init__(self, metric_path, isLeaf, value):
     self.metric_path = metric_path
     self.real_metric = metric_path
     self.name = metric_path.split('.')[-1]
     self.__isLeaf = isLeaf
+    self.value = value
 
   def isLeaf(self):
     return self.__isLeaf                                                                                                                                                                            
