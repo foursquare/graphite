@@ -225,7 +225,13 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
   log.info('fetching %s' % pathExpr)
   pathExpr = addPrefix(pathExpr)
-  metrics = [addPrefix(m) for m in hypertable_index.findMetric(pathExpr)]
+  metricData = hypertable_index.findMetric(pathExpr)
+  metrics = [addPrefix(m[0]) for m in metricData]
+  metricRate = {}
+  for m in metricData:
+    if not m[1]:
+      raise Exception("metric %s doesn't specify a rate!" % m[0])
+    metricRate[m[0]] = m[1]
 
   if not metrics:
     return []
@@ -256,8 +262,6 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   log.info(scan_spec)
 
   valuesMap = defaultdict(list)
-  sortedVals = {}
-  metricStep = {}
 
   def processResult(key, family, column, val, ts):
     its = long(ts) / 10**9L  #nanoseconds -> seconds
@@ -269,40 +273,20 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
 
   elapsed = end - start
 
-  stepsSeen = defaultdict(int)
-    
-  for m in valuesMap.keys():
-    # determine step size (the minimum evenly divisible step found)
-    minStep = elapsed
-    sortedVals[m] = sorted(valuesMap[m], key=lambda x: x[0])
-    for i in range(1, len(sortedVals[m])):
-      step = sortedVals[m][i][0] - sortedVals[m][i-1][0]
-      if elapsed % step == 0:
-        stepsSeen[step] += 1
-  mostCommonStep = -1
-  mostCommonCount = 0
-  for k,v in stepsSeen.iteritems():
-    if v > mostCommonCount:
-      mostCommonCount = v
-      mostCommonStep = k
-  # hack for no data
-  if mostCommonStep == -1:
-    mostCommonStep = 60
-
   for m in valuesMap.keys():
     # resample everything to 'best' granularity
-    steps = int(end - start) / mostCommonStep
+    steps = int(end - start) / metricRate[m]
 
     # push final values
     finalValues = [None] * steps
-    for x in sortedVals[m]:
-      bucket = int(min(round(float(x[0] - start) / float(mostCommonStep)), steps - 1))
+    for x in valuesMap[m]:
+      bucket = int(min(round(float(x[0] - start) / float(metricRate[m])), steps - 1))
       finalValues[bucket] = float(x[1])
     valuesMap[m] = finalValues
 
   seriesList = []
   for m in sorted(valuesMap.keys()):
-    series = TimeSeries(removePrefix(m), start, end, mostCommonStep, valuesMap[m])
+    series = TimeSeries(removePrefix(m), start, end, metricRate[m], valuesMap[m])
     series.pathExpression = pathExpr # hack to pass expressions through to render functions
     seriesList.append(series)
 
