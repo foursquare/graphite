@@ -230,8 +230,10 @@ def fetchDataFromHyperTable(requestContext, pathExpr):
   metricRate = {}
   for m in metricData:
     if not m[1]:
-      raise Exception("metric %s doesn't specify a rate!" % m[0])
-    metricRate[m[0]] = m[1]
+      log.info("metric %s doesn't specify a rate! Not rendering..." % m[0])
+      metrics.remove(m[0])
+    else:
+      metricRate[m[0]] = m[1]
 
   if not metrics:
     return []
